@@ -1,4 +1,4 @@
-# Site Blocker - A Privacy-Focused Website Blocker Extension
+# Site Blocker - A Privacy-Focused Website Blocker
 
 **Site Blocker** is a minimalist, privacy-first browser extension that helps you block distracting or unwanted websites without giving up control over your data.
 

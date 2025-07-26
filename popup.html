@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Site Blocker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Site Blocker</h1>
+    <div class="main-controls">
+      <div class="button-group">
+        <button id="toggle-block-btn">Block/Unblock current site</button>
+      </div>
+      <div class="input-group">
+        <input type="text" id="site-input" placeholder="Enter a site to block (e.g., facebook.com)">
+        <button id="add-btn">Add</button>
+      </div>
+    </div>
+    <ul id="blocked-list"></ul>
+    
+    <div class="import-export">
+      <div class="import-export-buttons">
+        <button id="export-btn">Export List</button>
+        <button id="import-btn">Import List</button>
+      </div>
+      <textarea id="import-export-area" placeholder="Paste JSON list here to import..."></textarea>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

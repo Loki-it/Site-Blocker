@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   const siteInput = document.getElementById('site-input');
   const addBtn = document.getElementById('add-btn');
   const blockedList = document.getElementById('blocked-list');
@@ -6,16 +6,19 @@ document.addEventListener('DOMContentLoaded', function() {
   const importBtn = document.getElementById('import-btn');
   const importExportArea = document.getElementById('import-export-area');
   const toggleBlockBtn = document.getElementById('toggle-block-btn');
-  
+
   loadAndRenderBlockedSites();
-  
-  addBtn.addEventListener('click', function() {
-    const site = siteInput.value.trim();
+
+  addBtn.addEventListener('click', function () {
+    let site = siteInput.value.trim();
     if (!site) return;
-    
-    chrome.storage.sync.get(['blockedSites'], function(result) {
+
+    // Format the domain: remove http/https and www
+    site = site.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '');
+
+    chrome.storage.sync.get(['blockedSites'], function (result) {
       const sites = result.blockedSites || [];
-      
+
       if (!sites.some(s => s.toLowerCase() === site.toLowerCase())) {
         sites.push(site);
         saveAndRenderBlockedSites(sites);
@@ -25,24 +28,24 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   });
-  
-  blockedList.addEventListener('click', function(e) {
+
+  blockedList.addEventListener('click', function (e) {
     if (e.target.classList.contains('remove-btn')) {
       const siteToRemove = e.target.dataset.site;
-      chrome.storage.sync.get(['blockedSites'], function(result) {
+      chrome.storage.sync.get(['blockedSites'], function (result) {
         const updatedSites = (result.blockedSites || []).filter(site => site !== siteToRemove);
         saveAndRenderBlockedSites(updatedSites);
       });
     }
   });
-  
-  exportBtn.addEventListener('click', function() {
-    chrome.storage.sync.get(['blockedSites'], function(result) {
+
+  exportBtn.addEventListener('click', function () {
+    chrome.storage.sync.get(['blockedSites'], function (result) {
       importExportArea.value = JSON.stringify(result.blockedSites || [], null, 2);
     });
   });
-  
-  importBtn.addEventListener('click', function() {
+
+  importBtn.addEventListener('click', function () {
     try {
       const sites = JSON.parse(importExportArea.value);
       if (Array.isArray(sites)) {
@@ -56,44 +59,44 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  toggleBlockBtn.addEventListener('click', function() {
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+  toggleBlockBtn.addEventListener('click', function () {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (tabs[0] && tabs[0].url) {
         const url = new URL(tabs[0].url);
         const currentSite = url.hostname;
-        
-        chrome.storage.sync.get(['blockedSites'], function(result) {
+
+        chrome.storage.sync.get(['blockedSites'], function (result) {
           let sites = result.blockedSites || [];
           const isBlocked = sites.some(s => s.toLowerCase() === currentSite.toLowerCase());
-          
+
           if (isBlocked) {
             sites = sites.filter(s => s.toLowerCase() !== currentSite.toLowerCase());
             saveAndRenderBlockedSites(sites, () => {
-              chrome.runtime.sendMessage({action: "updateRules"}, () => {
+              chrome.runtime.sendMessage({ action: "updateRules" }, () => {
                 chrome.tabs.reload(tabs[0].id);
               });
             });
           } else {
             sites.push(currentSite);
             saveAndRenderBlockedSites(sites, () => {
-              chrome.runtime.sendMessage({action: "updateRules"});
+              chrome.runtime.sendMessage({ action: "updateRules" });
             });
           }
         });
       }
     });
   });
-  
+
   function updateToggleButton() {
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (tabs[0] && tabs[0].url) {
         const url = new URL(tabs[0].url);
         const currentSite = url.hostname;
-        
-        chrome.storage.sync.get(['blockedSites'], function(result) {
+
+        chrome.storage.sync.get(['blockedSites'], function (result) {
           const sites = result.blockedSites || [];
           const isBlocked = sites.some(s => s.toLowerCase() === currentSite.toLowerCase());
-          
+
           if (isBlocked) {
             toggleBlockBtn.textContent = 'Unblock current site';
             toggleBlockBtn.classList.add('unblock');
@@ -105,31 +108,31 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
-  
+
   function loadAndRenderBlockedSites() {
-    chrome.storage.sync.get(['blockedSites'], function(result) {
+    chrome.storage.sync.get(['blockedSites'], function (result) {
       renderBlockedList(result.blockedSites || []);
       updateToggleButton();
     });
   }
-  
+
   function saveAndRenderBlockedSites(sites, callback) {
-    chrome.storage.sync.set({blockedSites: sites}, function() {
+    chrome.storage.sync.set({ blockedSites: sites }, function () {
       renderBlockedList(sites);
       if (callback) {
         callback();
       }
     });
   }
-  
+
   function renderBlockedList(sites) {
     blockedList.innerHTML = '';
-    
+
     if (sites.length === 0) {
       blockedList.innerHTML = '<li class="empty-message">No sites blocked</li>';
       return;
     }
-    
+
     sites.forEach(site => {
       const li = document.createElement('li');
       li.innerHTML = `

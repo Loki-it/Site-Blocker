@@ -1,39 +1,38 @@
-let blockedSites = [];
+const REDIRECT_URL = chrome.runtime.getURL('blocked.html');
 
-chrome.storage.sync.get(['blockedSites'], function(result) {
-  if (result.blockedSites) {
-    blockedSites = result.blockedSites;
-  }
-});
+async function rebuildRules() {
+  const { blockedSites = [] } = await chrome.storage.sync.get(['blockedSites']);
 
-chrome.webRequest.onBeforeRequest.addListener(
-  function(details) {
-    const url = new URL(details.url);
-    const domain = url.hostname;
-    
-    for (const site of blockedSites) {
-      if (domain.includes(site) || site.includes(domain)) {
-        return {redirectUrl: chrome.runtime.getURL(`blocked.html?url=${encodeURIComponent(details.url)}`)};
+  const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+  const existingIds = existingRules.map(r => r.id);
+
+  const newRules = blockedSites.map((site, index) => ({
+    id: index + 1,
+    priority: 1,
+    action: {
+      type: 'redirect',
+      redirect: {
+        url: REDIRECT_URL + '?url=' + encodeURIComponent('https://' + site)
       }
+    },
+    condition: {
+      urlFilter: `||${site}`,
+      resourceTypes: ['main_frame']
     }
-    return {cancel: false};
-  },
-  {urls: ["<all_urls>"]},
-  ["blocking"]
-);
+  }));
 
-chrome.storage.onChanged.addListener(function(changes, namespace) {
-  if (changes.blockedSites) {
-    blockedSites = changes.blockedSites.newValue;
-  }
-});
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: existingIds,
+    addRules: newRules
+  });
+}
 
-chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  if (request.action === "updateRules") {
-    chrome.storage.sync.get(['blockedSites'], function(result) {
-      blockedSites = result.blockedSites || [];
-      sendResponse({status: "complete"});
-    });
+chrome.runtime.onStartup.addListener(rebuildRules);
+chrome.runtime.onInstalled.addListener(rebuildRules);
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'updateRules') {
+    rebuildRules().then(() => sendResponse({ status: 'complete' }));
     return true;
   }
 });

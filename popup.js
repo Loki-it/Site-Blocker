@@ -9,47 +9,47 @@ document.addEventListener('DOMContentLoaded', function () {
 
   loadAndRenderBlockedSites();
 
-  addBtn.addEventListener('click', function () {
+  addBtn.addEventListener('click', async function () {
     let site = siteInput.value.trim();
     if (!site) return;
 
-    // Format the domain: remove http/https and www
     site = site.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '');
 
-    chrome.storage.sync.get(['blockedSites'], function (result) {
-      const sites = result.blockedSites || [];
+    const { blockedSites: sites = [] } = await chrome.storage.sync.get(['blockedSites']);
 
-      if (!sites.some(s => s.toLowerCase() === site.toLowerCase())) {
-        sites.push(site);
-        saveAndRenderBlockedSites(sites);
-        siteInput.value = '';
-      } else {
-        alert('This site is already in the blocked list!');
-      }
-    });
-  });
-
-  blockedList.addEventListener('click', function (e) {
-    if (e.target.classList.contains('remove-btn')) {
-      const siteToRemove = e.target.dataset.site;
-      chrome.storage.sync.get(['blockedSites'], function (result) {
-        const updatedSites = (result.blockedSites || []).filter(site => site !== siteToRemove);
-        saveAndRenderBlockedSites(updatedSites);
-      });
+    if (!sites.some(s => s.toLowerCase() === site.toLowerCase())) {
+      sites.push(site);
+      await saveAndRenderBlockedSites(sites);
+      siteInput.value = '';
+    } else {
+      alert('This site is already in the blocked list!');
     }
   });
 
-  exportBtn.addEventListener('click', function () {
-    chrome.storage.sync.get(['blockedSites'], function (result) {
-      importExportArea.value = JSON.stringify(result.blockedSites || [], null, 2);
-    });
+  // Allow pressing Enter in the input field to add a site
+  siteInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') addBtn.click();
   });
 
-  importBtn.addEventListener('click', function () {
+  blockedList.addEventListener('click', async function (e) {
+    if (e.target.classList.contains('remove-btn')) {
+      const siteToRemove = e.target.dataset.site;
+      const { blockedSites = [] } = await chrome.storage.sync.get(['blockedSites']);
+      const updatedSites = blockedSites.filter(site => site !== siteToRemove);
+      await saveAndRenderBlockedSites(updatedSites);
+    }
+  });
+
+  exportBtn.addEventListener('click', async function () {
+    const { blockedSites = [] } = await chrome.storage.sync.get(['blockedSites']);
+    importExportArea.value = JSON.stringify(blockedSites, null, 2);
+  });
+
+  importBtn.addEventListener('click', async function () {
     try {
       const sites = JSON.parse(importExportArea.value);
       if (Array.isArray(sites)) {
-        saveAndRenderBlockedSites(sites);
+        await saveAndRenderBlockedSites(sites);
         importExportArea.value = 'List imported successfully!';
       } else {
         importExportArea.value = 'Error: Must be an array of sites';
@@ -59,70 +59,66 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  toggleBlockBtn.addEventListener('click', function () {
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-      if (tabs[0] && tabs[0].url) {
-        const url = new URL(tabs[0].url);
-        const currentSite = url.hostname;
+  toggleBlockBtn.addEventListener('click', async function () {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.url) return;
 
-        chrome.storage.sync.get(['blockedSites'], function (result) {
-          let sites = result.blockedSites || [];
-          const isBlocked = sites.some(s => s.toLowerCase() === currentSite.toLowerCase());
+    let currentSite;
+    try {
+      currentSite = new URL(tab.url).hostname;
+    } catch {
+      return;
+    }
 
-          if (isBlocked) {
-            sites = sites.filter(s => s.toLowerCase() !== currentSite.toLowerCase());
-            saveAndRenderBlockedSites(sites, () => {
-              chrome.runtime.sendMessage({ action: "updateRules" }, () => {
-                chrome.tabs.reload(tabs[0].id);
-              });
-            });
-          } else {
-            sites.push(currentSite);
-            saveAndRenderBlockedSites(sites, () => {
-              chrome.runtime.sendMessage({ action: "updateRules" });
-            });
-          }
-        });
-      }
-    });
+    const { blockedSites: sites = [] } = await chrome.storage.sync.get(['blockedSites']);
+    const isBlocked = sites.some(s => s.toLowerCase() === currentSite.toLowerCase());
+
+    let updatedSites;
+    if (isBlocked) {
+      updatedSites = sites.filter(s => s.toLowerCase() !== currentSite.toLowerCase());
+      await saveAndRenderBlockedSites(updatedSites);
+      // Reload the tab after unblocking so the user can navigate away
+      await chrome.tabs.reload(tab.id);
+    } else {
+      updatedSites = [...sites, currentSite];
+      await saveAndRenderBlockedSites(updatedSites);
+    }
   });
 
-  function updateToggleButton() {
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-      if (tabs[0] && tabs[0].url) {
-        const url = new URL(tabs[0].url);
-        const currentSite = url.hostname;
+  async function updateToggleButton() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.url) return;
 
-        chrome.storage.sync.get(['blockedSites'], function (result) {
-          const sites = result.blockedSites || [];
-          const isBlocked = sites.some(s => s.toLowerCase() === currentSite.toLowerCase());
+    let currentSite;
+    try {
+      currentSite = new URL(tab.url).hostname;
+    } catch {
+      return;
+    }
 
-          if (isBlocked) {
-            toggleBlockBtn.textContent = 'Unblock current site';
-            toggleBlockBtn.classList.add('unblock');
-          } else {
-            toggleBlockBtn.textContent = 'Block current site';
-            toggleBlockBtn.classList.remove('unblock');
-          }
-        });
-      }
-    });
+    const { blockedSites: sites = [] } = await chrome.storage.sync.get(['blockedSites']);
+    const isBlocked = sites.some(s => s.toLowerCase() === currentSite.toLowerCase());
+
+    if (isBlocked) {
+      toggleBlockBtn.textContent = 'Unblock current site';
+      toggleBlockBtn.classList.add('unblock');
+    } else {
+      toggleBlockBtn.textContent = 'Block current site';
+      toggleBlockBtn.classList.remove('unblock');
+    }
   }
 
-  function loadAndRenderBlockedSites() {
-    chrome.storage.sync.get(['blockedSites'], function (result) {
-      renderBlockedList(result.blockedSites || []);
-      updateToggleButton();
-    });
+  async function loadAndRenderBlockedSites() {
+    const { blockedSites = [] } = await chrome.storage.sync.get(['blockedSites']);
+    renderBlockedList(blockedSites);
+    await updateToggleButton();
   }
 
-  function saveAndRenderBlockedSites(sites, callback) {
-    chrome.storage.sync.set({ blockedSites: sites }, function () {
-      renderBlockedList(sites);
-      if (callback) {
-        callback();
-      }
-    });
+  async function saveAndRenderBlockedSites(sites) {
+    await chrome.storage.sync.set({ blockedSites: sites });
+    renderBlockedList(sites);
+    await updateToggleButton();
+    chrome.runtime.sendMessage({ action: 'updateRules' }).catch(() => {});
   }
 
   function renderBlockedList(sites) {
